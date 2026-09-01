@@ -237,8 +237,21 @@ export default function PaymentPage({
     }
   };
 
+  // TIMEZONE-SAFE DATE FORMATTER
   const formatReportDate = (value) => {
     if (!value) return "-";
+    
+    // If format is YYYY-MM-DD
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split("-");
+      const localDate = new Date(Number(year), Number(month) - 1, Number(day));
+      return localDate.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    }
+
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
 
@@ -248,6 +261,11 @@ export default function PaymentPage({
       year: "numeric",
     });
   };
+
+  // The exact date saved with the quotation
+  const displayQuotationDate = formatReportDate(
+    quotation?.quotation_date || quotation?.created_at
+  );
 
   const openReport = () => {
     setShowReport(true);
@@ -568,9 +586,7 @@ export default function PaymentPage({
                           {index + 1}
                         </td>
                         <td className="px-5 py-3.5 text-[12.5px] font-semibold tabular-nums text-[#3A362C]">
-                          {new Date(payment.payment_date).toLocaleDateString(
-                            "en-IN",
-                          )}
+                          {formatReportDate(payment.payment_date)}
                         </td>
                         <td className="px-5 py-3.5">
                           <span className="rounded-[3px] border border-[#D9D3C3] px-2.5 py-1 text-[11px] font-semibold text-[#5B5647]">
@@ -713,7 +729,7 @@ export default function PaymentPage({
                         </div>
                       </div>
 
-                      {/* RIGHT BOX WITH ASM LOGO INSIDE */}
+                      {/* RIGHT BOX WITH ASM LOGO INSIDE & BILL PREVIEW DATE */}
                       <div className="shrink-0 rounded-[4px] border border-[#D9D3C3] bg-[#FAF8F2] px-3.5 py-2.5 flex items-center gap-3">
                         <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[#D9D3C3] bg-black">
                           <img
@@ -732,7 +748,7 @@ export default function PaymentPage({
                             #{quotation?.quotation_number || "-"}
                           </p>
                           <p className="text-[10px] text-[#8A8371]">
-                            {formatReportDate(quotation?.created_at)}
+                            {displayQuotationDate}
                           </p>
                         </div>
                       </div>
@@ -786,7 +802,7 @@ export default function PaymentPage({
                             Report Generated
                           </span>
                           <span className="font-semibold tabular-nums text-[#3A362C]">
-                            {formatReportDate(new Date())}
+                            {displayQuotationDate}
                           </span>
                         </div>
 

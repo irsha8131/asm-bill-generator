@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import asmLogo from "../assets/asm-logo.jpeg";
+import { supabase } from "../utils/supabase";
 
 const ActivityLoader = ({ message = "Loading saved quotations..." }) => (
   <div className="flex flex-col items-center justify-center gap-3 py-16">
@@ -17,8 +18,10 @@ export default function AllQuotationsPage({
   onOpenQuotation,
   onBack,
   onRefresh,
+  onDeleteQuotation,
 }) {
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
 
   const filteredQuotations = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -41,6 +44,59 @@ export default function AllQuotationsPage({
       return haystack.includes(term);
     });
   }, [existingQuotations, search]);
+
+  // =========================================================
+  // DELETE QUOTATION HANDLER
+  // =========================================================
+  const handleDeleteQuotation = async (e, quotation) => {
+    e.stopPropagation();
+
+    const code = quotation.quotation_number || "this quotation";
+    const confirmed = window.confirm(
+      `Are you sure you want to delete quotation #${code}?\n\nThis will permanently delete the quotation, its items, and payment history.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(quotation.id);
+
+      if (typeof onDeleteQuotation === "function") {
+        await onDeleteQuotation(quotation.id);
+      } else {
+        // Delete payments
+        await supabase
+          .from("payments")
+          .delete()
+          .eq("quotation_id", quotation.id);
+
+        // Delete items
+        await supabase
+          .from("quotation_items")
+          .delete()
+          .eq("quotation_id", quotation.id);
+
+        // Delete quotation
+        const { error } = await supabase
+          .from("quotations")
+          .delete()
+          .eq("id", quotation.id);
+
+        if (error) throw error;
+      }
+
+      alert(`Quotation #${code} deleted successfully.`);
+
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Delete quotation error:", error);
+      alert(error?.message || "Failed to delete quotation. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F2EA] text-[#1E2A38]">
@@ -89,7 +145,7 @@ export default function AllQuotationsPage({
             </h2>
 
             <p className="mt-1.5 sm:mt-2 max-w-xl text-[13px] sm:text-[14px] leading-relaxed text-[#6B6558]">
-              Review saved quotations, check payments received, or open an existing quote to manage its ledger.
+              Review saved quotations, check payments received, open to edit, or delete unneeded quotes.
             </p>
           </div>
 
@@ -176,6 +232,7 @@ export default function AllQuotationsPage({
                   const paid = Number(quotation.total_paid || 0);
                   const balance = Math.max(0, total - paid);
                   const isPaid = balance <= 0 && total > 0;
+                  const isDeleting = deletingId === quotation.id;
 
                   return (
                     <div
@@ -246,17 +303,40 @@ export default function AllQuotationsPage({
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => onOpenQuotation(quotation.id)}
-                          className="inline-flex h-10 w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-[3px] border border-[#1E2A38] bg-white px-4 text-[12px] font-semibold text-[#1E2A38] transition-colors duration-150 hover:bg-[#1E2A38] hover:text-white"
-                        >
-                          Open
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M5 12h14" />
-                            <path d="m13 6 6 6-6 6" />
-                          </svg>
-                        </button>
+                        {/* ACTION BUTTONS: OPEN + DELETE */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenQuotation(quotation.id)}
+                            disabled={isDeleting}
+                            className="inline-flex h-10 flex-1 sm:flex-initial shrink-0 items-center justify-center gap-1.5 rounded-[3px] border border-[#1E2A38] bg-white px-4 text-[12px] font-semibold text-[#1E2A38] transition-colors duration-150 hover:bg-[#1E2A38] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Open
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M5 12h14" />
+                              <path d="m13 6 6 6-6 6" />
+                            </svg>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteQuotation(e, quotation)}
+                            disabled={isDeleting}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[3px] border border-[#EAC1BA] bg-[#FDF2F0] text-[#B24A3C] transition-colors duration-150 hover:bg-[#B24A3C] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Delete quotation permanently"
+                          >
+                            {isDeleting ? (
+                              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#B24A3C] border-t-transparent" />
+                            ) : (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

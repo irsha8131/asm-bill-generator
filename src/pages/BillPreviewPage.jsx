@@ -74,23 +74,37 @@ export default function BillPreview({
   quotationNumber = "2026-01",
   onSave,
   saving = false,
+  quotationDate: propDate,
+  setQuotationDate: setPropDate,
 }) {
   const quotationRef = useRef(null);
 
   const [savingPDF, setSavingPDF] = useState(false);
   const [upiId, setUpiId] = useState("");
 
-  const itemPages = useMemo(() => {
-    return createItemPages(items);
-  }, [items]);
+  // Internal date fallback if not passed
+  const [localDate, setLocalDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const selectedDate = propDate || localDate;
+  const setSelectedDate = setPropDate || setLocalDate;
 
-  const quotationDate = useMemo(() => {
-    return new Date().toLocaleDateString("en-IN", {
+  const [isEditingDate, setIsEditingDate] = useState(false);
+
+  // Formatted date string (e.g., "01 Sep 2026")
+  const formattedQuotationDate = useMemo(() => {
+    if (!selectedDate) return "-";
+    const parsed = new Date(selectedDate);
+    if (Number.isNaN(parsed.getTime())) return String(selectedDate);
+
+    return parsed.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",
     });
-  }, []);
+  }, [selectedDate]);
+
+  const itemPages = useMemo(() => {
+    return createItemPages(items);
+  }, [items]);
 
   const accountDetails = {
     accountName: "ASM INTERIORS",
@@ -156,6 +170,7 @@ export default function BillPreview({
         .from("quotations")
         .update({
           quotation_number: quotationNumber,
+          quotation_date: selectedDate,
           subtotal: Number(subtotal || 0),
           discount_amount: Number(discountAmount || 0),
           gst_rate: Number(gstRate || 0),
@@ -182,6 +197,7 @@ export default function BillPreview({
 
     try {
       setSavingPDF(true);
+      setIsEditingDate(false);
 
       const pages = Array.from(
         quotationRef.current.querySelectorAll(".quotation-page")
@@ -249,7 +265,10 @@ export default function BillPreview({
   };
 
   const handlePrint = () => {
-    window.print();
+    setIsEditingDate(false);
+    setTimeout(() => {
+      window.print();
+    }, 50);
   };
 
   return (
@@ -266,6 +285,18 @@ export default function BillPreview({
         </button>
 
         <div className="action-right">
+          {/* EDITABLE DATE PICKER SHORTCUT */}
+          <div className="date-picker-action">
+            <span className="date-label">📅 Date:</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="action-date-input"
+              title="Change quotation date"
+            />
+          </div>
+
           <button
             type="button"
             onClick={handleSave}
@@ -356,7 +387,27 @@ export default function BillPreview({
                         <div className="quotation-meta">
                           <div>
                             <span>Date</span>
-                            <strong>{quotationDate}</strong>
+                            <div className="editable-date-container">
+                              {isEditingDate ? (
+                                <input
+                                  type="date"
+                                  value={selectedDate}
+                                  autoFocus
+                                  onBlur={() => setIsEditingDate(false)}
+                                  onChange={(e) => setSelectedDate(e.target.value)}
+                                  className="inline-date-input"
+                                />
+                              ) : (
+                                <strong
+                                  onClick={() => setIsEditingDate(true)}
+                                  className="clickable-date"
+                                  title="Click to edit date"
+                                >
+                                  {formattedQuotationDate}
+                                  <span className="edit-date-pencil" data-pdf-ignore="true">✎</span>
+                                </strong>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -395,7 +446,7 @@ export default function BillPreview({
                         </div>
                         <div className="detail-row">
                           <span>Date</span>
-                          <strong>{quotationDate}</strong>
+                          <strong>{formattedQuotationDate}</strong>
                         </div>
                         <div className="detail-row">
                           <span>Prepared by</span>
@@ -680,6 +731,65 @@ export default function BillPreview({
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
+        }
+
+        .date-picker-action {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: #ffffff;
+          border: 1px solid #D9D3C3;
+          padding: 0 10px;
+          height: 42px;
+          border-radius: 3px;
+        }
+
+        .date-label {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: #5B5647;
+        }
+
+        .action-date-input {
+          border: none;
+          outline: none;
+          font-size: 12px;
+          font-weight: 600;
+          color: #1E2A38;
+          background: transparent;
+          cursor: pointer;
+        }
+
+        .editable-date-container {
+          display: inline-block;
+        }
+
+        .clickable-date {
+          cursor: pointer;
+          border-bottom: 1px dashed #9C6B30;
+          padding-bottom: 1px;
+          transition: color 0.15s ease;
+        }
+
+        .clickable-date:hover {
+          color: #9C6B30;
+        }
+
+        .edit-date-pencil {
+          margin-left: 4px;
+          font-size: 10px;
+          color: #9C6B30;
+        }
+
+        .inline-date-input {
+          font-size: 10px;
+          font-weight: 700;
+          border: 1px solid #9C6B30;
+          padding: 2px 4px;
+          border-radius: 2px;
+          outline: none;
+          color: #1E2A38;
+          background: #FAF8F2;
         }
 
         .secondary-action,
